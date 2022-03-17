@@ -100,9 +100,13 @@ describe("MNLToken", function () {
   });
 
   it("Should issue specified amount of tokens on the specified account, increasing the total supply", async function () {
+    const ownerAddress = owner.address;
+
+    const role = ethers.utils.id("MINTER_ROLE");
+    await token.grantRole(role, ownerAddress);
+
     await expect(token.mint(ZERO_ADDRESS, 123)).to.be.revertedWith("Not valid address");
 
-    const ownerAddress = owner.address;
     await expect(token.mint(ownerAddress, convertToBigNumber(22)))
       .to.emit(token, "Transfer")
       .withArgs(ZERO_ADDRESS, ownerAddress, convertToBigNumber(22));
@@ -113,6 +117,9 @@ describe("MNLToken", function () {
 
   it("Should destroy specified amount of tokens from the specified account`, reducing the total supply", async function () {
     const ownerAddress = owner.address;
+
+    const role = ethers.utils.id("BURNER_ROLE");
+    await token.grantRole(role, ownerAddress);
 
     await expect(token.burn(ZERO_ADDRESS, 123)).to.be.revertedWith("Not valid address");
     await expect(token.burn(ownerAddress, convertToBigNumber(222))).to.be.revertedWith("Not enough tokens on balance to burn");

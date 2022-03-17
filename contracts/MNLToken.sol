@@ -1,9 +1,13 @@
 //SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/access/AccessControl.sol";
 import "./ERC20Interface.sol";
 
-contract MNLToken is ERC20Interface {
+contract MNLToken is ERC20Interface, AccessControl {
+
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
     string private _name = "Manul Token";
     string private _symbol = "MNT";
@@ -23,6 +27,8 @@ contract MNLToken is ERC20Interface {
         // TODO: use mint fn instead?
         _totalSupply = _initialSupply;
         _balance[msg.sender] = _totalSupply;
+
+        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     function name() external view override returns (string memory) {
@@ -88,16 +94,14 @@ contract MNLToken is ERC20Interface {
         return _allowance[_owner][_spender];
     }
 
-    // TODO: manage fn visibility
-    function mint(address _account, uint256 _amount) external validAddress(_account) {
+    function mint(address _account, uint256 _amount) external onlyRole(MINTER_ROLE) validAddress(_account) {
         _totalSupply += _amount;
         _balance[_account] += _amount;
 
         emit Transfer(address(0), _account, _amount);
     }
 
-    // TODO: manage fn visibility
-    function burn(address _account, uint256 _amount) external validAddress(_account) {
+    function burn(address _account, uint256 _amount) external onlyRole(BURNER_ROLE) validAddress(_account) {
         require(_amount <= _balance[_account], "Not enough tokens on balance to burn");
 
         _totalSupply -= _amount;
