@@ -12,6 +12,7 @@ npx hardhat verify --network rinkeby DEPLOYED_CONTRACT_ADDRESS <arg>
 
 npx hardhat test
 npx hardhat coverage
+npx hardhat size-contracts
 
 npx hardhat help
 npx hardhat node
