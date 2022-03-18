@@ -52,9 +52,13 @@ contract MNLToken is ERC20Interface, AccessControl {
     }
 
     function transfer(address _to, uint256 _value) external validAddress(_to) override returns (bool success) {
-        require(_value <= _balance[msg.sender], "Not enough tokens");
+        uint256 ownerBalance = _balance[msg.sender];
 
-        _balance[msg.sender] -= _value;
+        require(_value <= ownerBalance, "Not enough tokens");
+
+        unchecked {
+            _balance[msg.sender] = ownerBalance - _value;
+        }
         _balance[_to] += _value;
 
         emit Transfer(msg.sender, _to, _value);
@@ -69,12 +73,20 @@ contract MNLToken is ERC20Interface, AccessControl {
         override
         returns (bool success)
     {
-        // TODO: add variables
-        require(_value <= _balance[_from], "Not enough tokens");
-        require(_value <= _allowance[_from][msg.sender], "Not enough tokens");
+        uint256 ownerBalance = _balance[_from];
+        uint256 delegateAllowance = allowance(_from, msg.sender);
 
-        _balance[_from] -= _value;
-        _allowance[_from][msg.sender] -= _value;
+        require(_value <= ownerBalance && _value <= delegateAllowance, "Not enough tokens");
+
+        unchecked {
+            _balance[_from] = ownerBalance - _value;
+            _allowance[_from][msg.sender] = delegateAllowance - _value;
+        }
+//        if (delegateAllowance != type(uint256).max) {
+//            unchecked {
+//                _allowance[_from][msg.sender] = delegateAllowance - _value;
+//            }
+//        }
         _balance[_to] += _value;
 
         emit Transfer(_from, _to, _value);
@@ -90,7 +102,7 @@ contract MNLToken is ERC20Interface, AccessControl {
         return true;
     }
 
-    function allowance(address _owner, address _spender) external view override returns (uint256 remaining) {
+    function allowance(address _owner, address _spender) public view override returns (uint256 remaining) {
         return _allowance[_owner][_spender];
     }
 
@@ -102,10 +114,15 @@ contract MNLToken is ERC20Interface, AccessControl {
     }
 
     function burn(address _account, uint256 _amount) external onlyRole(BURNER_ROLE) validAddress(_account) {
-        require(_amount <= _balance[_account], "Not enough tokens on balance to burn");
+        uint256 accountBalance = _balance[_account];
+
+        require(_amount <= accountBalance, "Not enough tokens on balance to burn");
 
         _totalSupply -= _amount;
-        _balance[_account] -= _amount;
+        unchecked {
+            _balance[_account] = accountBalance - _amount;
+        }
+
         emit Transfer(_account, address(0), _amount);
     }
 
