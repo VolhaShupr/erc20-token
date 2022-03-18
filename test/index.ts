@@ -26,13 +26,10 @@ describe("MNLToken", function () {
     await token.deployed();
 
     clean = await network.provider.request({ method: "evm_snapshot", params: [] });
-    // clean = await network.provider.send("evm_snapshot");
   });
 
   afterEach(async () => {
     await network.provider.request({ method: "evm_revert", params: [clean] });
-    // await network.provider.send("evm_snapshot", [clean]);
-    // clean = await network.provider.send("evm_snapshot");
   });
 
   it("Should return token name", async function () {
@@ -87,21 +84,28 @@ describe("MNLToken", function () {
     const ownerAddress = owner.address;
     const recipient = account1.address;
 
-    await expect(token.connect(delegate).transferFrom(ZERO_ADDRESS, recipient, 123)).to.be.revertedWith("Not valid address");
-    await expect(token.connect(delegate).transferFrom(ownerAddress, ZERO_ADDRESS, 123)).to.be.revertedWith("Not valid address");
-    await expect(token.connect(delegate).transferFrom(ownerAddress, recipient, convertToBigNumber(222)))
-      .to.be.revertedWith("Not enough tokens");
     await expect(token.connect(delegate).transferFrom(ownerAddress, recipient, convertToBigNumber(65)))
       .to.be.revertedWith("Not enough tokens");
+    await expect(token.connect(delegate).transferFrom(ownerAddress, ZERO_ADDRESS, 12)).to.be.revertedWith("Not valid address");
+    await expect(token.connect(delegate).transferFrom(ownerAddress, recipient, convertToBigNumber(222)))
+      .to.be.revertedWith("Not enough tokens");
+    await expect(token.connect(delegate).transferFrom(ZERO_ADDRESS, recipient, 0)).to.be.revertedWith("Not valid address");
 
-    await expect(token.connect(delegate).transferFrom(ownerAddress, recipient, convertToBigNumber(30)))
+    await expect(token.connect(delegate).transferFrom(ownerAddress, recipient, convertToBigNumber(29)))
       .to.emit(token, "Transfer")
-      .withArgs(ownerAddress, recipient, convertToBigNumber(30));
+      .withArgs(ownerAddress, recipient, convertToBigNumber(29));
 
+    expect(await token.balanceOf(recipient)).to.equal(convertToBigNumber(49));
+    expect(await token.balanceOf(ownerAddress)).to.equal(convertToBigNumber(62));
+    expect(await token.allowance(ownerAddress, delegate.address)).to.equal(convertToBigNumber(31));
+
+    await token.approve(delegate.address, ethers.constants.MaxUint256);
+    await expect(token.connect(delegate).transferFrom(ownerAddress, recipient, convertToBigNumber(1)))
+      .to.emit(token, "Transfer")
+      .withArgs(ownerAddress, recipient, convertToBigNumber(1));
     expect(await token.balanceOf(recipient)).to.equal(convertToBigNumber(50));
     expect(await token.balanceOf(ownerAddress)).to.equal(convertToBigNumber(61));
-    expect(await token.allowance(ownerAddress, delegate.address)).to.equal(convertToBigNumber(30));
-
+    expect(await token.allowance(ownerAddress, delegate.address)).to.equal(ethers.constants.MaxUint256);
   });
 
   it("Should return the amount which delegate is allowed to withdraw on behalf of owner", async function () {
