@@ -9,10 +9,14 @@ contract MNLToken is ERC20Interface, AccessControl {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
+    uint256 private constant TRANSFER_FEE_PERCENTAGE = 2; // fee is 2 %
+
     string private _name = "Manul Token";
     string private _symbol = "MNT";
     uint8 private _decimals = 18;
     uint256 private _totalSupply;
+
+    address private _feeRecipient;
 
     mapping(address => uint256) private _balance;
 
@@ -26,6 +30,7 @@ contract MNLToken is ERC20Interface, AccessControl {
     constructor(uint256 _initialSupply) {
         // TODO: use mint fn instead?
         _totalSupply = _initialSupply;
+        _feeRecipient = msg.sender;
         _balance[msg.sender] = _totalSupply;
 
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -51,45 +56,25 @@ contract MNLToken is ERC20Interface, AccessControl {
         return _balance[_owner];
     }
 
-    function transfer(address _to, uint256 _value) external validAddress(_to) override returns (bool success) {
-        uint256 ownerBalance = _balance[msg.sender];
-
-        require(_value <= ownerBalance, "Not enough tokens");
-
-        unchecked {
-            _balance[msg.sender] = ownerBalance - _value;
-        }
-        _balance[_to] += _value;
-
-        emit Transfer(msg.sender, _to, _value);
-
+    function transfer(address _to, uint256 _value) external override returns (bool success) {
+        _transfer(msg.sender, _to, _value, _calculateTransferFee(_value));
         return true;
     }
 
-    function transferFrom(address _from, address _to, uint256 _value)
-        external
-        validAddress(_to)
-        validAddress(_from)
-        override
-        returns (bool success)
-    {
-        uint256 ownerBalance = _balance[_from];
+    function transferFrom(address _from, address _to, uint256 _value) external override returns (bool success) {
         uint256 delegateAllowance = allowance(_from, msg.sender);
+        uint256 fee = _calculateTransferFee(_value);
+        uint256 valueWithFee = _value + fee;
 
-        require(_value <= ownerBalance && _value <= delegateAllowance, "Not enough tokens");
+        require(valueWithFee <= delegateAllowance, "Not enough tokens");
 
-        unchecked {
-            _balance[_from] = ownerBalance - _value;
-            _allowance[_from][msg.sender] = delegateAllowance - _value;
+        if (delegateAllowance != type(uint256).max) {
+            unchecked {
+                _allowance[_from][msg.sender] = delegateAllowance - valueWithFee;
+            }
         }
-//        if (delegateAllowance != type(uint256).max) {
-//            unchecked {
-//                _allowance[_from][msg.sender] = delegateAllowance - _value;
-//            }
-//        }
-        _balance[_to] += _value;
 
-        emit Transfer(_from, _to, _value);
+        _transfer(_from, _to, _value, fee);
 
         return true;
     }
@@ -124,6 +109,25 @@ contract MNLToken is ERC20Interface, AccessControl {
         }
 
         emit Transfer(_account, address(0), _amount);
+    }
+
+    function _transfer(address _from, address _to, uint256 _value, uint256 _fee) private validAddress(_to) validAddress(_from) {
+        uint256 ownerBalance = _balance[_from];
+        uint256 valueWithFee = _value + _fee;
+
+        require(valueWithFee <= ownerBalance, "Not enough tokens");
+
+        unchecked {
+            _balance[_from] = ownerBalance - valueWithFee;
+        }
+        _balance[_to] += _value;
+        _balance[_feeRecipient] += _fee;
+
+        emit Transfer(_from, _to, valueWithFee);
+    }
+
+    function _calculateTransferFee(uint256 _value) private pure returns (uint256) {
+        return _value * TRANSFER_FEE_PERCENTAGE / 100;
     }
 
 
