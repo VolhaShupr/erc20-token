@@ -6,12 +6,13 @@ import "@nomiclabs/hardhat-waffle";
 import "@typechain/hardhat";
 import "hardhat-gas-reporter";
 import "solidity-coverage";
+import "hardhat-contract-sizer";
 
 import "./tasks";
 
 dotenv.config();
 
-const { RINKEBY_API_URL, PRIVATE_KEY1, PRIVATE_KEY2, PRIVATE_KEY3, ETHERSCAN_API_KEY, REPORT_GAS } = process.env;
+const { RINKEBY_API_URL, PRIVATE_KEY1, PRIVATE_KEY2, PRIVATE_KEY3, ETHERSCAN_API_KEY } = process.env;
 
 const config: HardhatUserConfig = {
   solidity: "0.8.4",
@@ -22,11 +23,17 @@ const config: HardhatUserConfig = {
     },
   },
   gasReporter: {
-    enabled: REPORT_GAS !== undefined,
+    enabled: true,
     currency: "USD",
   },
   etherscan: {
     apiKey: ETHERSCAN_API_KEY,
+  },
+  contractSizer: {
+    alphaSort: true,
+    disambiguatePaths: false,
+    runOnCompile: true,
+    strict: true,
   },
 };
 

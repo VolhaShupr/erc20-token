@@ -1,9 +1,13 @@
 //SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/access/AccessControl.sol";
 import "./ERC20Interface.sol";
 
-contract MNLToken is ERC20Interface {
+contract MNLToken is ERC20Interface, AccessControl {
+
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
     string private _name = "Manul Token";
     string private _symbol = "MNT";
@@ -23,6 +27,8 @@ contract MNLToken is ERC20Interface {
         // TODO: use mint fn instead?
         _totalSupply = _initialSupply;
         _balance[msg.sender] = _totalSupply;
+
+        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     function name() external view override returns (string memory) {
@@ -46,9 +52,13 @@ contract MNLToken is ERC20Interface {
     }
 
     function transfer(address _to, uint256 _value) external validAddress(_to) override returns (bool success) {
-        require(_value <= _balance[msg.sender], "Not enough tokens");
+        uint256 ownerBalance = _balance[msg.sender];
 
-        _balance[msg.sender] -= _value;
+        require(_value <= ownerBalance, "Not enough tokens");
+
+        unchecked {
+            _balance[msg.sender] = ownerBalance - _value;
+        }
         _balance[_to] += _value;
 
         emit Transfer(msg.sender, _to, _value);
@@ -63,12 +73,20 @@ contract MNLToken is ERC20Interface {
         override
         returns (bool success)
     {
-        // TODO: add variables
-        require(_value <= _balance[_from], "Not enough tokens");
-        require(_value <= _allowance[_from][msg.sender], "Not enough tokens");
+        uint256 ownerBalance = _balance[_from];
+        uint256 delegateAllowance = allowance(_from, msg.sender);
 
-        _balance[_from] -= _value;
-        _allowance[_from][msg.sender] -= _value;
+        require(_value <= ownerBalance && _value <= delegateAllowance, "Not enough tokens");
+
+        unchecked {
+            _balance[_from] = ownerBalance - _value;
+            _allowance[_from][msg.sender] = delegateAllowance - _value;
+        }
+//        if (delegateAllowance != type(uint256).max) {
+//            unchecked {
+//                _allowance[_from][msg.sender] = delegateAllowance - _value;
+//            }
+//        }
         _balance[_to] += _value;
 
         emit Transfer(_from, _to, _value);
@@ -84,24 +102,27 @@ contract MNLToken is ERC20Interface {
         return true;
     }
 
-    function allowance(address _owner, address _spender) external view override returns (uint256 remaining) {
+    function allowance(address _owner, address _spender) public view override returns (uint256 remaining) {
         return _allowance[_owner][_spender];
     }
 
-    // TODO: manage fn visibility
-    function mint(address _account, uint256 _amount) external validAddress(_account) {
+    function mint(address _account, uint256 _amount) external onlyRole(MINTER_ROLE) validAddress(_account) {
         _totalSupply += _amount;
         _balance[_account] += _amount;
 
         emit Transfer(address(0), _account, _amount);
     }
 
-    // TODO: manage fn visibility
-    function burn(address _account, uint256 _amount) external validAddress(_account) {
-        require(_amount <= _balance[_account], "Not enough tokens on balance to burn");
+    function burn(address _account, uint256 _amount) external onlyRole(BURNER_ROLE) validAddress(_account) {
+        uint256 accountBalance = _balance[_account];
+
+        require(_amount <= accountBalance, "Not enough tokens on balance to burn");
 
         _totalSupply -= _amount;
-        _balance[_account] -= _amount;
+        unchecked {
+            _balance[_account] = accountBalance - _amount;
+        }
+
         emit Transfer(_account, address(0), _amount);
     }
 

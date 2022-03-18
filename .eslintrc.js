@@ -38,12 +38,5 @@ module.exports = {
         asyncArrow: "always",
       },
     ],
-    //
-    // "prettier/prettier": [
-    //   "error",
-    //   {
-    //     proseWrap: "never",
-    //   },
-    // ],
   },
 };
