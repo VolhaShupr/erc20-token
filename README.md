@@ -19,3 +19,5 @@ npx hardhat node
 npx hardhat compile
 npx hardhat clean
 ```
+
+Verified [contract](https://rinkeby.etherscan.io/address/0x08da338ec0947ac3f504abde37a7dbbc856a3ed1)
