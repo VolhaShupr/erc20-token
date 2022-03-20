@@ -20,11 +20,6 @@ describe("MNLToken", function () {
     delegate: SignerWithAddress,
     account1: SignerWithAddress;
 
-  let totalSupply = INITIAL_SUPPLY;
-  let ownerBalance = INITIAL_SUPPLY;
-  let delegateAllowance = 0;
-  let recipientBalance = 0;
-
   let clean: any; // snapshot
 
   before(async () => {
@@ -39,6 +34,7 @@ describe("MNLToken", function () {
 
   afterEach(async () => {
     await network.provider.request({ method: "evm_revert", params: [clean] });
+    clean = await network.provider.request({ method: "evm_snapshot", params: [] });
   });
 
   it("Should return token name", async function () {
@@ -73,11 +69,8 @@ describe("MNLToken", function () {
       .to.emit(token, "Transfer")
       .withArgs(owner.address, recipient, convertToBigNumber(value + fee));
 
-    ownerBalance -= value; // -fee + fee
-    recipientBalance += value;
-
-    expect(await token.balanceOf(owner.address)).to.equal(convertToBigNumber(ownerBalance));
-    expect(await token.balanceOf(recipient)).to.equal(convertToBigNumber(recipientBalance));
+    expect(await token.balanceOf(owner.address)).to.equal(convertToBigNumber(91)); // -fee + fee
+    expect(await token.balanceOf(recipient)).to.equal(convertToBigNumber(value));
   });
 
   it("Should set allowed amount for delegate to withdraw over the caller's tokens", async function () {
@@ -85,19 +78,22 @@ describe("MNLToken", function () {
 
     const ownerAddress = owner.address;
     const delegateAddress = delegate.address;
-    delegateAllowance = 60;
+    const allowance = 60;
 
-    await expect(token.approve(delegateAddress, convertToBigNumber(delegateAllowance)))
+    await expect(token.approve(delegateAddress, convertToBigNumber(allowance)))
       .to.emit(token, "Approval")
-      .withArgs(ownerAddress, delegateAddress, convertToBigNumber(delegateAllowance));
+      .withArgs(ownerAddress, delegateAddress, convertToBigNumber(allowance));
 
-    expect(await token.balanceOf(ownerAddress)).to.equal(convertToBigNumber(ownerBalance));
-    expect(await token.allowance(ownerAddress, delegateAddress)).to.equal(convertToBigNumber(delegateAllowance));
+    expect(await token.balanceOf(ownerAddress)).to.equal(initialSupply);
+    expect(await token.allowance(ownerAddress, delegateAddress)).to.equal(convertToBigNumber(allowance));
   });
 
   it("Should transfer specified tokens amount on behalf of the owner account to the recipient account", async function () {
     const ownerAddress = owner.address;
     const recipient = account1.address;
+    const allowance = 60;
+
+    await token.approve(delegate.address, convertToBigNumber(allowance));
 
     await expect(token.connect(delegate).transferFrom(ownerAddress, recipient, convertToBigNumber(65)))
       .to.be.revertedWith("Not enough tokens");
@@ -112,13 +108,9 @@ describe("MNLToken", function () {
       .to.emit(token, "Transfer")
       .withArgs(ownerAddress, recipient, convertToBigNumber(value + fee));
 
-    ownerBalance -= value; // -fee + fee
-    recipientBalance += value;
-    delegateAllowance -= value + fee;
-
-    expect(await token.balanceOf(recipient)).to.equal(convertToBigNumber(recipientBalance));
-    expect(await token.balanceOf(ownerAddress)).to.equal(convertToBigNumber(ownerBalance));
-    expect(await token.allowance(ownerAddress, delegate.address)).to.equal(convertToBigNumber(delegateAllowance));
+    expect(await token.balanceOf(recipient)).to.equal(convertToBigNumber(29));
+    expect(await token.balanceOf(ownerAddress)).to.equal(convertToBigNumber(82)); // -fee + fee
+    expect(await token.allowance(ownerAddress, delegate.address)).to.equal(convertToBigNumber(allowance - (value + fee)));
 
     const value1 = 1;
     const fee1 = calculateTransferFee(value1);
@@ -127,19 +119,14 @@ describe("MNLToken", function () {
       .to.emit(token, "Transfer")
       .withArgs(ownerAddress, recipient, convertToBigNumber(value1 + fee1));
 
-    ownerBalance -= value1; // -fee + fee
-    recipientBalance += value1;
-    delegateAllowance = 2 ** 256 - 1;
-
-    expect(await token.balanceOf(recipient)).to.equal(convertToBigNumber(recipientBalance));
-    expect(await token.balanceOf(ownerAddress)).to.equal(convertToBigNumber(ownerBalance));
+    expect(await token.balanceOf(recipient)).to.equal(convertToBigNumber(30));
+    expect(await token.balanceOf(ownerAddress)).to.equal(convertToBigNumber(81)); // -fee + fee
     expect(await token.allowance(ownerAddress, delegate.address)).to.equal(ethers.constants.MaxUint256);
   });
 
   it("Should return the amount which delegate is allowed to withdraw on behalf of owner", async function () {
-    delegateAllowance = 65;
-    await token.approve(delegate.address, convertToBigNumber(delegateAllowance));
-    expect(await token.allowance(owner.address, delegate.address)).to.equal(convertToBigNumber(delegateAllowance));
+    await token.approve(delegate.address, convertToBigNumber(65));
+    expect(await token.allowance(owner.address, delegate.address)).to.equal(convertToBigNumber(65));
   });
 
   it("Should issue specified amount of tokens on the specified account, increasing the total supply", async function () {
@@ -155,11 +142,8 @@ describe("MNLToken", function () {
       .to.emit(token, "Transfer")
       .withArgs(ZERO_ADDRESS, ownerAddress, convertToBigNumber(value));
 
-    ownerBalance += value;
-    totalSupply += value;
-
-    expect(await token.balanceOf(ownerAddress)).to.equal(convertToBigNumber(ownerBalance));
-    expect(await token.totalSupply()).to.equal(convertToBigNumber(totalSupply));
+    expect(await token.balanceOf(ownerAddress)).to.equal(convertToBigNumber(INITIAL_SUPPLY + value));
+    expect(await token.totalSupply()).to.equal(convertToBigNumber(INITIAL_SUPPLY + value));
   });
 
   it("Should destroy specified amount of tokens from the specified account`, reducing the total supply", async function () {
@@ -176,11 +160,8 @@ describe("MNLToken", function () {
       .to.emit(token, "Transfer")
       .withArgs(ownerAddress, ZERO_ADDRESS, convertToBigNumber(value));
 
-    ownerBalance -= value;
-    totalSupply -= value;
-
-    expect(await token.balanceOf(ownerAddress)).to.equal(convertToBigNumber(ownerBalance));
-    expect(await token.totalSupply()).to.equal(convertToBigNumber(totalSupply));
+    expect(await token.balanceOf(ownerAddress)).to.equal(convertToBigNumber(INITIAL_SUPPLY - value));
+    expect(await token.totalSupply()).to.equal(convertToBigNumber(INITIAL_SUPPLY - value));
   });
 
 });
